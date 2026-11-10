@@ -53,6 +53,18 @@
       <div class="workspace">
         <section class="panel calendar-panel">
           <div class="preview-top"><div><div class="section-caption">02 / ПРЕВЬЮ</div><h2>Посмотри, как это будет</h2></div><span class="badge" id="plan-badge"><span class="status-dot"></span> Живое превью</span></div>
+          <div id="editor-modes" class="segments editor-switch" aria-label="Способ создания календаря"><button data-editor="generate" class="active" aria-pressed="true">Генератор</button><button data-editor="draw" aria-pressed="false"><span aria-hidden="true">▦</span> Пиксельный рисунок</button></div>
+          <div id="drawing-tools" class="drawing-tools" hidden>
+            <div class="brushes" id="brushes" role="group" aria-label="Кисть: новых коммитов за день">
+              <button data-brush="0" class="brush" aria-label="Ластик: убрать новые коммиты" aria-pressed="false" title="Ластик (0)"><i class="level-0"></i><span>Ластик</span></button>
+              <button data-brush="1" class="brush" aria-label="Кисть: 1 новый коммит" aria-pressed="false"><i class="level-1"></i><span>1</span></button>
+              <button data-brush="3" class="brush" aria-label="Кисть: 3 новых коммита" aria-pressed="false"><i class="level-2"></i><span>3</span></button>
+              <button data-brush="6" class="brush" aria-label="Кисть: 6 новых коммитов" aria-pressed="false"><i class="level-3"></i><span>6</span></button>
+              <button data-brush="10" class="brush selected" aria-label="Кисть: 10 новых коммитов" aria-pressed="true"><i class="level-4"></i><span>10</span></button>
+            </div>
+            <div class="drawing-actions"><button id="draw-hand" class="draw-button" aria-pressed="false" title="Перемещать календарь без рисования">Перемещение</button><button id="draw-undo" class="draw-button" aria-label="Отменить штрих" title="Отменить: Ctrl/⌘ Z" disabled>↶</button><button id="draw-redo" class="draw-button" aria-label="Повторить штрих" title="Повторить: Ctrl/⌘ Shift Z" disabled>↷</button><button id="draw-clear" class="draw-button">Очистить рисунок</button><label class="draw-zoom">Масштаб <select id="draw-zoom" aria-label="Масштаб рисунка"><option value="1">1×</option><option value="2">2×</option><option value="3">3×</option></select></label></div>
+            <p id="drawing-hint" class="muted small" role="status">Рисуй по клеткам мышью или пальцем. Цифра — новых коммитов за день. Ластик не удаляет текущую активность GitHub.</p>
+          </div>
           <div class="calendar-toolbar"><div class="segments" id="modes" aria-label="Режим просмотра"><button data-mode="preview" class="active">Результат</button><button data-mode="current">Сейчас</button><button data-mode="diff">Добавится</button></div><span class="muted small" id="period-label"></span></div>
           <div class="graph-shell"><div id="calendar" class="calendar" aria-label="Календарь активности"><div class="loading">Загружаю генератор…</div></div></div>
           <div class="legend-row"><span class="muted small" id="calendar-total">Всё считается из вашего плана</span><div class="legend"><span>Меньше</span><i class="level-0"></i><i class="level-1"></i><i class="level-2"></i><i class="level-3"></i><i class="level-4"></i><span>Больше</span></div></div>

@@ -48,23 +48,29 @@ type Clock struct {
 	Spread             int     `json:"spread_minutes"`
 }
 
+// ManualSchedule contains explicit daily total targets. Missing dates stay blank.
+type ManualSchedule struct {
+	Targets map[string]int `json:"targets"`
+}
+
 type Config struct {
-	Start           string   `json:"start"`
-	End             string   `json:"end"`
-	Timezone        string   `json:"timezone"`
-	AsOf            string   `json:"as_of"`
-	Preset          string   `json:"preset"`
-	Intensity       int      `json:"intensity"`
-	Mean            float64  `json:"mean"`
-	Min             int      `json:"min"`
-	Max             int      `json:"max"`
-	InactivePercent float64  `json:"inactive_percent"`
-	Randomness      float64  `json:"randomness"`
-	Seed            int64    `json:"seed"`
-	Weekends        Weekends `json:"weekends"`
-	Effects         Effects  `json:"effects"`
-	Clock           Clock    `json:"clock"`
-	Author          Identity `json:"author"`
+	Start           string          `json:"start"`
+	End             string          `json:"end"`
+	Timezone        string          `json:"timezone"`
+	AsOf            string          `json:"as_of"`
+	Preset          string          `json:"preset"`
+	Intensity       int             `json:"intensity"`
+	Mean            float64         `json:"mean"`
+	Min             int             `json:"min"`
+	Max             int             `json:"max"`
+	InactivePercent float64         `json:"inactive_percent"`
+	Randomness      float64         `json:"randomness"`
+	Seed            int64           `json:"seed"`
+	Weekends        Weekends        `json:"weekends"`
+	Effects         Effects         `json:"effects"`
+	Clock           Clock           `json:"clock"`
+	Author          Identity        `json:"author"`
+	Manual          *ManualSchedule `json:"manual,omitempty"`
 }
 
 func DefaultConfig(now time.Time) Config {
@@ -156,7 +162,26 @@ func (c Config) Validate() error {
 	if err := c.validateClock(); err != nil {
 		return err
 	}
+	if err := c.validateManual(); err != nil {
+		return err
+	}
 	return c.validateWeekends()
+}
+
+func (c Config) validateManual() error {
+	if c.Manual == nil {
+		return nil
+	}
+	if c.Manual.Targets == nil {
+		return fmt.Errorf("manual targets must be an object")
+	}
+	for date, count := range c.Manual.Targets {
+		d, err := time.Parse(time.DateOnly, date)
+		if err != nil || d.Format(time.DateOnly) != date || date < c.Start || date > c.End || count < 0 || count > c.Max {
+			return fmt.Errorf("invalid manual target on %s; use dates in the period and counts from 0 to max", date)
+		}
+	}
+	return nil
 }
 
 func (c Config) validateEffects() error {

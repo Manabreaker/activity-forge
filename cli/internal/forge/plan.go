@@ -72,6 +72,9 @@ func ValidatePlan(p Plan) error {
 		if d.Target < 0 || d.Target > p.Config.Max || d.Existing != p.Existing.Days[d.Date].Count || d.New < 0 || d.New != len(d.Timestamps) || d.New > max(0, d.Target-d.Existing) || d.Projected != d.Existing+d.New {
 			return fmt.Errorf("invalid plan counts on %s", d.Date)
 		}
+		if p.Config.Manual != nil && d.Target != p.Config.Manual.Targets[d.Date] {
+			return fmt.Errorf("manual target does not match plan on %s", d.Date)
+		}
 		for _, stamp := range d.Timestamps {
 			if stamp.In(loc).Format(time.DateOnly) != d.Date || stamp.After(cutoff) || stamp.Nanosecond() != 0 || (!previous.IsZero() && !stamp.After(previous)) {
 				return fmt.Errorf("invalid timestamp on %s", d.Date)

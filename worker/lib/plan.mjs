@@ -15,6 +15,16 @@ function localStamp(ms, timezone) {
   return `${v.year}-${v.month}-${v.day}T${v.hour}:${v.minute}:${v.second}`;
 }
 
+function validateManual(c) {
+  if (!Object.hasOwn(c, 'manual')) return null;
+  const manual = c.manual, targets = manual?.targets;
+  if (!manual || Array.isArray(manual) || !targets || typeof targets !== 'object' || Array.isArray(targets)) fail('invalid_drawing', 'Некорректный пиксельный рисунок.');
+  for (const [date, count] of Object.entries(targets)) {
+    if (!validDate(date) || date < c.start || date > c.end || !Number.isSafeInteger(count) || count < 0 || count > c.max) fail('invalid_drawing', 'Проверьте даты и насыщенность рисунка.');
+  }
+  return targets;
+}
+
 export async function validatePayload(payload, planId, user) {
   if (typeof payload !== 'string' || payload.length > 1800000 || !/^[a-f\d]{64}$/.test(planId || '') || await sha256(payload) !== planId) fail('plan_changed', 'Контрольная сумма плана не совпала. Зафиксируйте превью ещё раз.');
   let p;
@@ -30,10 +40,12 @@ export async function validatePayload(payload, planId, user) {
   if (!Number.isFinite(cutoff) || cutoff > Date.now() || typeof c.timezone !== 'string' || c.timezone.length > 80) fail('future_date', 'Нельзя публиковать будущие даты.');
   try { if (c.end > localStamp(cutoff, c.timezone).slice(0, 10)) fail('future_date', 'Нельзя публиковать будущие даты.'); }
   catch { fail('invalid_timezone', 'Некорректный часовой пояс.'); }
+  const targets = validateManual(c);
   let previous = -Infinity, planned = 0, existing = 0;
   for (let i = 0; i < days; i++) {
     const d = p.days[i], date = new Date(Date.parse(c.start) + i * 86400000).toISOString().slice(0, 10);
     if (!d || d.date !== date || !Array.isArray(d.timestamps) || ![d.new, d.existing, d.projected, d.target].every(Number.isSafeInteger) || d.target < 0 || d.target > c.max || d.new < 0 || d.existing < 0 || d.existing > 10000000 || d.new !== d.timestamps.length || d.new > Math.max(0, d.target - d.existing) || d.projected !== d.new + d.existing) fail('invalid_counts', 'Количество коммитов расходится с превью.');
+    if (targets && d.target !== (targets[date] ?? 0)) fail('invalid_drawing', 'Количество коммитов расходится с рисунком.');
     if (!p.existing.known && d.existing !== 0) fail('invalid_snapshot', 'Неизвестная активность должна быть помечена явно.');
     if (p.existing.known && (p.existing.login !== user.login || p.existing.days?.[date]?.contributionCount !== d.existing)) fail('invalid_snapshot', 'Текущая активность принадлежит другому аккаунту или неполна.');
     for (const stamp of d.timestamps) {

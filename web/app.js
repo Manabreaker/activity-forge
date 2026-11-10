@@ -1,10 +1,13 @@
 import { API_ORIGIN } from './config.js';
 import { publicationDestination, matchingReceipt } from './client-state.js';
+import { Drawing, BRUSH_COUNTS, drawingConfig, brushLevel, calendarLayout, cellIndex, gridLine, restoreEditor } from './drawing.js';
 const $ = id => document.getElementById(id);
 const num = n => Number(n).toLocaleString('ru-RU');
 const esc = value => String(value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-const state = { config: null, profile: 'bursts', result: null, snapshot: { known: false }, account: null, mode: 'preview', frozen: null, ticket: null, publishing: false, ready: false, baselineLoading: false, epoch: 0 };
+const state = { config: null, profile: 'bursts', result: null, snapshot: { known: false }, account: null, mode: 'preview', editorMode: 'generate', drawing: new Drawing(), brush: 10, tool: 'brush', frozen: null, ticket: null, publishing: false, ready: false, baselineLoading: false, epoch: 0 };
 let configReady = false, generationTimer;
+let stroke = null;
+let lastPreview = null;
 const store = {
   get(key, fallback = null) { try { return JSON.parse(localStorage.getItem('af.' + key)) ?? fallback; } catch { return fallback; } },
   set(key, value) { try { localStorage.setItem('af.' + key, JSON.stringify(value)); } catch { notice('Браузер не разрешает сохранять настройки. Скачай понравившийся план перед закрытием вкладки.'); } },
@@ -60,19 +63,31 @@ function persistSettings() {
   const c = structuredClone(state.config); c.author = { name: '', email: '' };
   store.set('settings', { config: c, profile: state.profile });
 }
+function persistDrawing() { store.set('drawing', { mode: state.editorMode, cells: state.drawing.cells, brush: state.brush }); }
+function editorSnapshot() { return { config: structuredClone(state.config), mode: state.editorMode, cells: { ...state.drawing.cells } }; }
+function restoreFrozen(saved) {
+  finishStroke();
+  const editor = restoreEditor(saved, state.config);
+  state.config = editor.config; state.editorMode = editor.mode;
+  if (editor.mode === 'draw') state.drawing = new Drawing(editor.cells);
+  state.snapshot = saved.plan.existing; state.result = saved; setControls(); setFrozen(saved); persistDrawing();
+}
 function generate() {
   if (!state.ready || state.frozen) return;
   try {
-    if (!$('settings').checkValidity()) return;
+    if (!$('settings').checkValidity()) throw new Error('Проверь даты и настройки перед сохранением плана.');
     readControls();
     if ((Date.parse(state.config.end) - Date.parse(state.config.start)) / 86400000 > 365) throw new Error('Выбери период до 366 дней.');
     state.config.as_of = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-    state.result = generator({ action: 'generate', config: state.config, existing: state.snapshot });
-    persistSettings(); render(); notice('');
-  } catch (error) { state.result = null; $('freeze').disabled = true; notice(error.message, 'error'); }
+    const config = state.editorMode === 'draw' ? drawingConfig(state.config, state.snapshot, state.drawing.cells) : state.config;
+    state.result = generator({ action: 'generate', config, existing: state.snapshot });
+    lastPreview = state.result.plan;
+    persistSettings(); render(); notice(''); return true;
+  } catch (error) { state.result = null; $('freeze').disabled = true; $('export').disabled = true; notice(error.message, 'error'); return false; }
 }
-function schedule() { $('freeze').disabled = true; clearTimeout(generationTimer); generationTimer = setTimeout(generate, 120); }
-function plan() { return state.frozen?.plan || state.result?.plan; }
+function schedule() { $('freeze').disabled = true; $('export').disabled = true; clearTimeout(generationTimer); generationTimer = setTimeout(generate, 120); }
+function flushPlan() { finishStroke(); clearTimeout(generationTimer); return state.frozen ? true : generate(); }
+function plan() { return state.frozen?.plan || state.result?.plan || lastPreview; }
 function countFor(day) { return state.mode === 'current' ? day.existing : state.mode === 'diff' ? day.new : day.projected; }
 function levelFor(n, positives) {
   if (!n) return 0;
@@ -80,8 +95,7 @@ function levelFor(n, positives) {
   return 4;
 }
 function graphSVG(p, exported = false) {
-  const offset = new Date(p.config.start).getUTCDay(), weeks = Math.ceil((offset + p.days.length) / 7);
-  const step = 13, cell = 10, left = 29, top = 22, width = left + weeks * step + 5;
+  const { offset, step, cell, left, top, width } = calendarLayout(p.config.start, p.days.length);
   const positives = p.days.map(countFor).filter(n => n > 0).sort((a, b) => a - b);
   const colors = [0, 1, 2, 3, 4].map(n => getComputedStyle(document.documentElement).getPropertyValue('--l' + n).trim());
   const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
@@ -98,7 +112,7 @@ function graphSVG(p, exported = false) {
       lastLabel = column;
     }
     lastMonth = month;
-    let level = levelFor(countFor(d), positives), fill = colors[level];
+    let level = p.config.manual && state.mode !== 'current' ? brushLevel(countFor(d)) : levelFor(countFor(d), positives), fill = colors[level];
     if (state.mode === 'current' && p.existing.known) {
       const current = p.existing.days[d.date];
       const actual = ['NONE', 'FIRST_QUARTILE', 'SECOND_QUARTILE', 'THIRD_QUARTILE', 'FOURTH_QUARTILE'].indexOf(current?.contributionLevel);
@@ -126,9 +140,100 @@ function render() {
     bar.style.height = (45 * m.total / maximum) + 'px'; label.textContent = new Intl.DateTimeFormat('ru', { month: 'short', timeZone: 'UTC' }).format(new Date(m.month + '-01')).replace('.', '');
     column.title = `${m.month}: ${m.total}, добавится ${m.planned}`; column.append(bar, label); chart.append(column);
   }
-  $('freeze').disabled = p.statistics.planned === 0 || state.baselineLoading;
+  $('freeze').disabled = (!state.frozen && !state.result) || p.statistics.planned === 0 || state.baselineLoading;
+  $('export').disabled = !state.frozen && !state.result;
   $('plan-badge').innerHTML = state.frozen ? '<span class="status-dot"></span> План зафиксирован' : '<span class="status-dot"></span> Живое превью';
   $('prepare').disabled = !state.frozen || !state.account || state.authExpired || !state.account.installation.installed || state.baselineLoading || ($('use-existing').checked && !p.existing.known);
+  updateEditor();
+}
+
+function updateEditor() {
+  const draw = state.editorMode === 'draw', locked = !!state.frozen;
+  $('drawing-tools').hidden = !draw;
+  document.querySelector('.controls').classList.toggle('drawing-settings', draw);
+  document.querySelectorAll('#settings input, #settings select, [data-profile], #reset, #regenerate').forEach(x => x.disabled = locked);
+  if (draw) {
+    for (const id of ['intensity', 'randomness', 'weekends', 'weekend-probability', 'weekend-multiplier', 'bursts', 'rests', 'monthly', 'streaks', 'vacations', 'trend', 'seed', 'regenerate']) $(id).disabled = true;
+    document.querySelectorAll('[data-profile]').forEach(b => b.disabled = true);
+  }
+  document.querySelectorAll('[data-editor]').forEach(b => { const selected = b.dataset.editor === state.editorMode; b.classList.toggle('active', selected); b.setAttribute('aria-pressed', selected); b.disabled = locked; });
+  document.querySelectorAll('[data-mode]').forEach(b => { const selected = b.dataset.mode === state.mode; b.classList.toggle('active', selected); b.setAttribute('aria-pressed', selected); });
+  document.querySelectorAll('[data-brush]').forEach(b => { const selected = state.tool === 'brush' && Number(b.dataset.brush) === state.brush; b.classList.toggle('selected', selected); b.setAttribute('aria-pressed', selected); b.disabled = locked; });
+  $('draw-hand').classList.toggle('selected', state.tool === 'hand'); $('draw-hand').setAttribute('aria-pressed', state.tool === 'hand');
+  const readOnly = locked || state.mode === 'current' || state.baselineLoading;
+  $('draw-undo').disabled = readOnly || !state.drawing.canUndo; $('draw-redo').disabled = readOnly || !state.drawing.canRedo;
+  $('draw-clear').disabled = readOnly || Object.keys(state.drawing.cells).length === 0;
+  const shell = document.querySelector('.graph-shell');
+  shell.classList.toggle('drawing', draw && !locked && state.mode !== 'current'); shell.classList.toggle('hand', state.tool === 'hand');
+  $('drawing-hint').textContent = locked ? 'Рисунок зафиксирован. Чтобы рисовать дальше, нажми «Вернуться к настройке».' : state.mode === 'current' ? 'Сейчас показана реальная история GitHub. Для рисования выбери «Добавится» или «Результат».' : 'Рисуй мышью или пальцем. Цифра — новых коммитов за день. Ластик убирает только рисунок. Для прокрутки выбери «Перемещение». Клавиатура: стрелки и пробел.';
+}
+
+function canDraw() { return state.ready && state.editorMode === 'draw' && !state.frozen && !state.baselineLoading && state.mode !== 'current'; }
+function pointerCell(event) {
+  const p = plan(), svg = $('calendar').querySelector('svg'), matrix = svg?.getScreenCTM();
+  if (!p || !matrix) return null;
+  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+  const l = calendarLayout(p.config.start, p.days.length);
+  if (point.x < l.left || point.x >= l.left + l.weeks * l.step || point.y < l.top || point.y >= l.top + 7 * l.step) return null;
+  return { x: Math.floor((point.x - l.left) / l.step), y: Math.floor((point.y - l.top) / l.step) };
+}
+function paintCells(points) {
+  const p = plan(); if (!p) return;
+  const layout = calendarLayout(p.config.start, p.days.length);
+  for (const point of points) {
+    const i = cellIndex(point, layout); if (i < 0) continue;
+    const d = p.days[i], existing = state.snapshot.known ? state.snapshot.days?.[d.date]?.contributionCount || 0 : 0;
+    try {
+      if (!state.drawing.paint(d.date, state.brush, existing)) continue;
+      const count = state.mode === 'preview' ? existing + state.brush : state.brush;
+      const rect = $('calendar').querySelector(`[data-day="${i}"]`);
+      rect?.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--l' + brushLevel(count)).trim());
+      $('freeze').disabled = true; $('export').disabled = true;
+    } catch (error) { notice(error.message, 'error'); }
+  }
+}
+function finishStroke() {
+  if (!stroke) return;
+  const current = stroke; stroke = null;
+  if ($('calendar').hasPointerCapture(current.id)) $('calendar').releasePointerCapture(current.id);
+  if (current.hand) return;
+  if (state.drawing.end()) { persistDrawing(); generate(); } else updateEditor();
+}
+function changeDrawing(action) { finishStroke(); if (!canDraw()) return; if (state.drawing[action]()) { persistDrawing(); generate(); } }
+function bindDrawing() {
+  $('editor-modes').onclick = event => {
+    const button = event.target.closest('[data-editor]'); if (!button || state.frozen || !state.ready) return;
+    finishStroke(); state.editorMode = button.dataset.editor;
+    if (state.editorMode === 'draw') state.mode = 'diff';
+    persistDrawing(); updateEditor(); generate();
+  };
+  $('brushes').onclick = event => { const button = event.target.closest('[data-brush]'); if (!button || state.frozen) return; finishStroke(); state.brush = Number(button.dataset.brush); state.tool = 'brush'; persistDrawing(); updateEditor(); };
+  $('draw-hand').onclick = () => { finishStroke(); state.tool = state.tool === 'hand' ? 'brush' : 'hand'; updateEditor(); };
+  $('draw-undo').onclick = () => changeDrawing('undo'); $('draw-redo').onclick = () => changeDrawing('redo'); $('draw-clear').onclick = () => changeDrawing('clear');
+  $('draw-zoom').onchange = () => { finishStroke(); const shell = document.querySelector('.graph-shell'); for (const n of [2, 3]) shell.classList.toggle('zoom-' + n, $('draw-zoom').value === String(n)); };
+  $('calendar').addEventListener('pointerdown', event => {
+    if (!canDraw() || (event.pointerType === 'mouse' && event.button !== 0) || !event.isPrimary) return;
+    const point = pointerCell(event); if (!point) return;
+    event.preventDefault(); finishStroke();
+    const hand = state.tool === 'hand';
+    stroke = { id: event.pointerId, last: point, hand, x: event.clientX, scroll: document.querySelector('.graph-shell').scrollLeft };
+    $('calendar').setPointerCapture(event.pointerId);
+    if (!hand) { state.drawing.begin(); paintCells([point]); }
+  });
+  $('calendar').addEventListener('pointermove', event => {
+    if (!stroke || stroke.id !== event.pointerId) return;
+    if (!canDraw()) { finishStroke(); return; }
+    if (stroke.hand) { document.querySelector('.graph-shell').scrollLeft = stroke.scroll + stroke.x - event.clientX; return; }
+    event.preventDefault(); const point = pointerCell(event);
+    if (!point) { stroke.last = null; return; }
+    paintCells(stroke.last ? gridLine(stroke.last, point) : [point]); stroke.last = point;
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) $('calendar').addEventListener(type, event => { if (stroke?.id === event.pointerId) finishStroke(); });
+  window.addEventListener('blur', finishStroke);
+  document.addEventListener('keydown', event => {
+    if (!canDraw() || /^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName) || event.target.isContentEditable || document.querySelector('dialog[open]')) return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); changeDrawing(event.shiftKey ? 'redo' : 'undo'); }
+  });
 }
 function showDay(index) {
   const p = plan(), d = p?.days[Number(index)]; if (!d) return;
@@ -136,6 +241,7 @@ function showDay(index) {
   $('day-detail').innerHTML = `<strong>${esc(d.date)}</strong>Уже есть: ${p.existing.known ? d.existing : 'неизвестно'} · Новых: ${d.new} · Итого: ${d.projected}<br>${d.timestamps.map(t => `<time>${esc(t.slice(11, 19))}</time>`).join('')}${d.timestamps.length ? ' · ' + esc(p.config.timezone) : ''}`;
 }
 function setFrozen(value) {
+  finishStroke(); state.drawing.locked = !!value;
   state.frozen = value; state.ticket = value?.ticket || null;
   if (value?.ticket?.repository) $('repository').value = value.ticket.repository.split('/')[1];
   $('repository').readOnly = !!value?.attempted;
@@ -175,7 +281,7 @@ async function loadAccount() {
     if (account.installation.selection === 'all') $('auth-status').textContent += ' При установке выбран доступ ко всем репозиториям; его можно сузить в настройках GitHub.';
     const saved = store.get(key('frozen'));
     if (saved?.plan?.config.author.email === account.author.email && !saved.receipt) {
-      state.snapshot = saved.plan.existing; state.result = saved; state.config = saved.plan.config; setControls(); setFrozen(saved);
+      restoreFrozen(saved);
       $('existing-status').textContent = 'Восстановлен зафиксированный план. При повторной отправке используется та же история.';
     } else await refreshBaseline();
     $('publication').hidden = false;
@@ -183,6 +289,7 @@ async function loadAccount() {
   } catch (error) { $('auth-status').textContent = error.message; notice(error.message, 'error'); }
 }
 function exportPlan() {
+  if (!flushPlan()) return;
   const p = plan(); if (!p) return;
   const format = $('export-format').value, svg = graphSVG(p, true), filename = 'activity-forge-' + p.id.slice(0, 12);
   if (format === 'json') return download(JSON.stringify(p, null, 2), filename + '.json', 'application/json');
@@ -213,6 +320,7 @@ async function prepare() {
     const f = state.frozen;
     const ticket = await api('/api/prepare', { payload: f.payload, planId: f.plan.id, repository: publicationDestination(f, $('repository').value) });
     state.ticket = ticket; f.ticket = ticket; store.set(key('frozen'), f);
+    notice('');
     $('confirm-details').innerHTML = [['Репозиторий', ticket.repository], ['Доступ', 'Приватный'], ['Основная ветка', 'Ветка по умолчанию в новом репозитории'], ['Новых коммитов', num(ticket.commits)], ['Период', f.plan.config.start + ' — ' + f.plan.config.end], ['План', ticket.planId.slice(0, 16) + '…']].map(([a, b]) => `<div><dt>${esc(a)}</dt><dd>${esc(b)}</dd></div>`).join('');
     $('agree').checked = false; $('approve').disabled = true; $('publish-progress').textContent = ''; $('confirm-dialog').showModal();
   } catch (error) { notice(error.message, 'error'); }
@@ -230,6 +338,7 @@ async function publishSelected() {
   state.publishing = false; $('cancel-publish').disabled = false;
 }
 function bind() {
+  bindDrawing();
   $('settings').addEventListener('submit', e => e.preventDefault());
   $('settings').addEventListener('input', event => {
     if (event.target.id === 'intensity') state.config.mean = [0, .55, .95, 1.6, 2.3, 3.2, 4.5, 5.9, 7.4, 9.2, 11][Number(event.target.value)];
@@ -244,7 +353,7 @@ function bind() {
     state.config.start = date(start); state.config.end = date(end); setControls(); generate();
   });
   $('profiles').addEventListener('click', event => {
-    const button = event.target.closest('[data-profile]'); if (!button || state.frozen) return;
+    const button = event.target.closest('[data-profile]'); if (!button || state.frozen || state.editorMode === 'draw') return;
     const previous = state.config; state.profile = button.dataset.profile;
     state.config = generator({ action: 'defaults', profile: state.profile }).config;
     for (const field of ['start', 'end', 'timezone', 'seed', 'author']) state.config[field] = previous[field];
@@ -252,10 +361,21 @@ function bind() {
   });
   $('regenerate').onclick = () => { state.config.seed = crypto.getRandomValues(new Uint32Array(1))[0] & 0x7fffffff; setControls(); generate(); };
   $('reset').onclick = () => { state.profile = 'bursts'; state.config = generator({ action: 'defaults', profile: state.profile }).config; setControls(); state.account ? refreshBaseline() : generate(); };
-  $('modes').onclick = event => { const button = event.target.closest('[data-mode]'); if (!button) return; state.mode = button.dataset.mode; document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b === button)); render(); };
-  $('calendar').onclick = event => { const cell = event.target.closest('[data-day]'); if (cell) showDay(cell.dataset.day); };
-  $('calendar').onkeydown = event => { if (['Enter', ' '].includes(event.key) && event.target.dataset.day !== undefined) { event.preventDefault(); showDay(event.target.dataset.day); } };
-  $('freeze').onclick = () => { if (!state.result) return; clearTimeout(generationTimer); setFrozen(structuredClone(state.result)); $('publish-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  $('modes').onclick = event => { const button = event.target.closest('[data-mode]'); if (!button) return; finishStroke(); state.mode = button.dataset.mode; render(); };
+  $('calendar').onclick = event => { if (state.editorMode === 'draw' && !state.frozen && state.mode !== 'current') return; const cell = event.target.closest('[data-day]'); if (cell) showDay(cell.dataset.day); };
+  $('calendar').onkeydown = event => {
+    if (event.target.dataset.day === undefined) return;
+    const index = Number(event.target.dataset.day);
+    const shift = { ArrowRight: 7, ArrowLeft: -7, ArrowDown: 1, ArrowUp: -1 }[event.key];
+    if (shift) { event.preventDefault(); $('calendar').querySelector(`[data-day="${index + shift}"]`)?.focus({ preventScroll: false }); return; }
+    if (!['Enter', ' '].includes(event.key)) return;
+    event.preventDefault();
+    if (!canDraw() || state.tool === 'hand') return showDay(index);
+    const layout = calendarLayout(plan().config.start, plan().days.length), n = index + layout.offset;
+    state.drawing.begin(); paintCells([{ x: Math.floor(n / 7), y: n % 7 }]); state.drawing.end(); persistDrawing(); generate();
+    $('calendar').querySelector(`[data-day="${index}"]`)?.focus({ preventScroll: true });
+  };
+  $('freeze').onclick = () => { if (!flushPlan() || !state.result?.plan.statistics.planned || state.baselineLoading) return; const f = structuredClone(state.result); f.editor = editorSnapshot(); setFrozen(f); $('publish-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   $('edit').onclick = () => { setFrozen(null); generate(); };
   $('connect').onclick = startLogin; $('refresh-account').onclick = loadAccount; $('use-existing').onchange = refreshBaseline;
   $('prepare').onclick = prepare; $('agree').onchange = () => $('approve').disabled = !$('agree').checked;
@@ -280,11 +400,15 @@ async function init() {
     state.ready = true;
     const defaults = generator({ action: 'defaults', profile: 'bursts' }).config;
     const saved = store.get('settings'); state.config = saved?.config || defaults; state.profile = saved?.profile || 'bursts';
+    delete state.config.manual;
+    const drawing = store.get('drawing'); state.drawing = new Drawing(drawing?.cells); state.editorMode = drawing?.mode === 'draw' ? 'draw' : 'generate';
+    if (BRUSH_COUNTS.includes(drawing?.brush)) state.brush = drawing.brush;
+    if (state.editorMode === 'draw') state.mode = 'diff';
     state.config.author = { name: '', email: '' };
     if (state.config.end > defaults.end || !state.config.start) state.config = defaults;
     $('start').max = defaults.end; $('end').max = defaults.end;
     setControls(); $('regenerate').disabled = false; generate();
-    const cached = store.get('frozen.anonymous'); if (cached?.payload && !session()) { state.config = cached.plan.config; state.result = cached; setControls(); setFrozen(cached); }
+    const cached = store.get('frozen.anonymous'); if (cached?.payload && !session()) restoreFrozen(cached);
     await loadAccount();
   } catch (error) { notice(error.message + ' Превью требует современного браузера с WebAssembly.', 'error'); }
   try { const result = await api('/api/config'); configReady = result.configured; if (!configReady) $('auth-status').textContent = 'Подключение GitHub ещё настраивается. Превью и экспорт доступны.'; }

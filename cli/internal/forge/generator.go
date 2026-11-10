@@ -2,6 +2,7 @@ package forge
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"math/rand"
 	"time"
@@ -11,6 +12,9 @@ import (
 func Generate(c Config, existing Snapshot) (Plan, error) {
 	if err := c.Validate(); err != nil {
 		return Plan{}, err
+	}
+	if c.Manual != nil {
+		c.Manual = &ManualSchedule{Targets: maps.Clone(c.Manual.Targets)}
 	}
 	_, _, loc, _ := c.Bounds()
 	start, end, _ := civilRange(c.Start, c.End)
@@ -30,7 +34,12 @@ func Generate(c Config, existing Snapshot) (Plan, error) {
 	p := Plan{Version: Version, Config: c, Existing: existing, Days: make([]Day, 0, len(dates))}
 	process := newProcess(r, c)
 	for i, date := range dates {
-		target := process.count(date, i, len(dates), vacation[i])
+		var target int
+		if c.Manual != nil {
+			target = c.Manual.Targets[date.Format(time.DateOnly)]
+		} else {
+			target = process.count(date, i, len(dates), vacation[i])
+		}
 		d := Day{Date: date.Format(time.DateOnly), Target: target, Timestamps: []time.Time{}}
 		d.Existing = existing.Days[d.Date].Count
 		d.New = max(0, target-d.Existing)
