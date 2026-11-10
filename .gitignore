@@ -1,0 +1,12 @@
+dist/
+site.tar.gz
+.env
+.env.*
+.dev.vars*
+node_modules/
+.wrangler/
+.sites-runtime/
+*.pem
+*.key
+cli/activityforge
+cli/dist/

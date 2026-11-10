@@ -1,0 +1,11 @@
+{
+  "name": "Activity Forge by Manabreaker",
+  "url": "https://manabreaker.github.io/activity-forge/",
+  "callback_urls": ["https://activity-forge-calendar.manabreaker.chatgpt.site/oauth/callback"],
+  "setup_url": "https://manabreaker.github.io/activity-forge/",
+  "redirect_url": "http://127.0.0.1:4320/setup/callback",
+  "public": true,
+  "hook_attributes": {"active": false},
+  "default_permissions": {"contents": "write", "metadata": "read", "repository_creation": "write"},
+  "default_events": []
+}

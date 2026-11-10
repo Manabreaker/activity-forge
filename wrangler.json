@@ -1,0 +1,11 @@
+{
+  "name": "activity-forge-api",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-11-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": false },
+  "vars": {
+    "FRONTEND_URL": "https://manabreaker.github.io/activity-forge/",
+    "API_ORIGIN": "https://activity-forge-calendar.manabreaker.chatgpt.site"
+  }
+}

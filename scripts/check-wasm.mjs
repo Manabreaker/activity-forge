@@ -1,0 +1,17 @@
+import { readFile } from 'node:fs/promises';
+import '../dist/pages/wasm_exec.js';
+import assert from 'node:assert/strict';
+const go = new Go();
+const result = await WebAssembly.instantiate(await readFile(new URL('../dist/pages/generator.wasm', import.meta.url)), go.importObject);
+go.run(result.instance);
+const call = request => JSON.parse(globalThis.activityForge(JSON.stringify(request)));
+const c = call({ action: 'defaults', profile: 'bursts' }).config;
+c.start = '2025-01-01'; c.end = '2025-12-31'; c.as_of = '2026-01-01T00:00:00Z';
+const a = call({ action: 'generate', config: c, existing: { known: false } });
+assert.ok(!a.error, a.error); assert.ok(a.plan.statistics.planned > 0); assert.equal(a.plan.days.length, 365);
+const b = call({ action: 'generate', config: c, existing: { known: false } });
+assert.equal(a.plan.id, b.plan.id); assert.equal(a.payload, b.payload);
+const digest = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(a.payload))).toString('hex');
+assert.equal(digest, a.plan.id);
+console.log(`WASM: ${a.plan.days.length} days, ${a.plan.statistics.planned} exact timestamps, deterministic SHA-256 verified.`);
+process.exit(0);
