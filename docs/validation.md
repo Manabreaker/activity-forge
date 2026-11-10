@@ -21,7 +21,8 @@
 - Зарегистрирован public GitHub App https://github.com/apps/activity-forge-by-manabreaker . Запрошены только Contents write, Metadata read и Repository creation write. Webhooks выключены. Client secret и SESSION_KEY настроены как runtime secrets Sites.
 - Развёрнута Sites version 3: source `bec9d57afaf180c6da3b47838b6deea0d35553c7`, deployment `appgdep_6af36488c58881918ed6bb4ffc15ef05`, environment revision 2.
 - Настоящий браузер прошёл вход через GitHub с S256 PKCE и вернулся в Pages. Адрес страницы после handoff очищен от fragment; профиль и реальный contributions calendar успешно загружены через App.
-- Окно установки GitHub подтверждает выбранные permissions и требует минимум один репозиторий в режиме Only select repositories. Финальное подтверждение установки остаётся за владельцем.
+- Владелец подтвердил реальную установку в личный аккаунт в режиме Only select repositories. В сохранённых настройках GitHub выбран ровно один репозиторий; Contents write, Metadata read и Repository creation write подтверждены. Сайт распознал установку через API.
+- На живом API подготовка отвергла существующий репозиторий до записи. Для нового имени сервер проверил зафиксированный план и выдал подтверждение с правильным назначением, количеством коммитов, периодом и ID плана. Диалог закрыт без публикации, исходные настройки восстановлены; HEAD существующей истории не изменился.
 - Создание нового репозитория, фактический receive-pack через App, повтор живой публикации и отзыв grant пока не проверены на GitHub. Для отправки истории требуется отдельное явное подтверждение конкретного плана в интерфейсе. Существующая личная история не перепубликовывалась.
 
 ## Хранение данных
