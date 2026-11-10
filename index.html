@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self' https://activity-forge-calendar.manabreaker.chatgpt.site; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="description" content="Настройте декоративный календарь GitHub. Превью в вашем браузере, прозрачные разрешения и публикация только после подтверждения.">
+  <meta name="color-scheme" content="dark light">
+  <title>Activity Forge — ваш ритм на GitHub</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./session.js"></script>
+  <script src="./wasm_exec.js" defer></script>
+  <script src="./app.js" type="module"></script>
+</head>
+<body>
+  <header class="topbar wrap">
+    <a class="brand" href="./" aria-label="Activity Forge — главная"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>activity<span class="brand-muted">forge</span></a>
+    <nav aria-label="Навигация"><a href="#how">Как это работает</a><button class="text-button" id="privacy-open">Ваши данные</button><a href="https://github.com/Manabreaker/activity-forge" target="_blank" rel="noreferrer">Исходный код ↗</a><button class="icon-button" id="theme" aria-label="Переключить тему">◐</button></nav>
+  </header>
+  <main class="wrap">
+    <section class="hero">
+      <div><div class="eyebrow"><span class="status-dot"></span> GITHUB CONTRIBUTIONS · КОНСТРУКТОР</div><h1>Твоя история.<br><span>В твоём ритме.</span></h1><p>Спокойные волны, короткие всплески или островки активности.<br class="desktop"> Найди свой рисунок — и посмотри на него до публикации.</p></div>
+      <div class="hero-note"><span class="local-icon">⌘</span><div><strong>Сначала — просто попробуй</strong><p>Календарь создаётся в этом браузере.<br>Для превью даже не нужен вход.</p></div></div>
+    </section>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <section class="studio" aria-label="Редактор календаря">
+      <aside class="controls panel">
+        <div class="section-caption"><span>01 / НАСТРОЙКА</span><button id="reset" class="text-button small">Сбросить</button></div>
+        <h2>Выбери характер</h2>
+        <div class="profiles" id="profiles">
+          <button data-profile="bursts" class="profile selected"><span class="profile-shape shape-bursts" aria-hidden="true">▁▂▆▃▁▁▅▇▃▁</span><span><b>Короткие всплески</b><small>Спокойно, с характером</small></span><span class="radio"></span></button>
+          <button data-profile="waves" class="profile"><span class="profile-shape" aria-hidden="true">▂▃▅▇▅▃▂▃▅▆</span><span><b>Мягкие волны</b><small>Плавный, размеренный ритм</small></span><span class="radio"></span></button>
+          <button data-profile="islands" class="profile"><span class="profile-shape" aria-hidden="true">▁▁▆▇▁▁▁▅▆▁</span><span><b>Островки активности</b><small>Больше воздуха и пауз</small></span><span class="radio"></span></button>
+        </div>
+        <div class="control-divider"></div>
+        <form id="settings">
+          <div class="field-heading"><label for="period">Период</label><select id="period"><option value="365">Последний год</option><option value="180">180 дней</option><option value="90">90 дней</option><option value="custom">Свой период</option></select></div>
+          <div class="date-fields"><label><span>С</span><input type="date" id="start" required></label><label><span>По</span><input type="date" id="end" required></label></div>
+          <div class="range-heading"><label for="intensity">Интенсивность</label><output for="intensity" id="intensity-value">3 / 10</output></div><input id="intensity" type="range" min="1" max="10" value="3"><div class="range-labels"><span>Легче</span><span>Насыщеннее</span></div>
+          <div class="range-heading"><label for="randomness">Непредсказуемость</label><output id="randomness-value" for="randomness">80%</output></div><input id="randomness" type="range" min="0" max="100" value="80"><div class="range-labels"><span>Ровный ритм</span><span>Больше контраста</span></div>
+          <label class="select-label" for="weekends">Выходные<select id="weekends"><option value="rare">Изредка активные</option><option value="off">Полностью свободные</option><option value="light">Лёгкая активность</option><option value="moderate">Немного спокойнее</option><option value="same">Как будни</option><option value="custom">Свои настройки</option></select></label>
+          <div id="weekend-custom" hidden><label class="select-label">Вероятность активности, %<input id="weekend-probability" type="number" min="0" max="100" value="30"></label><label class="select-label">Нагрузка относительно будней<input id="weekend-multiplier" type="number" min="0" max="5" step="0.1" value="0.4"></label></div>
+          <details id="advanced"><summary>Тонкая настройка <span>＋</span></summary><div class="advanced-fields">
+            <label class="toggle"><span>Периоды повышенной активности</span><input id="bursts" type="checkbox" checked></label><label class="toggle"><span>Короткие перерывы</span><input id="rests" type="checkbox" checked></label><label class="toggle"><span>Разная активность по месяцам</span><input id="monthly" type="checkbox" checked></label><label class="toggle"><span>Цепочки активных дней</span><input id="streaks" type="checkbox" checked></label>
+            <label class="select-label">Отпуска за период<input id="vacations" type="number" value="1" min="0" max="5"></label><label class="select-label">Тренд<select id="trend"><option value="wave">Волнообразный</option><option value="stable">Стабильный</option><option value="increasing">Возрастает</option><option value="decreasing">Убывает</option><option value="random">Случайный</option></select></label>
+            <label class="select-label">Часовой пояс<input id="timezone" value="Europe/Moscow" maxlength="80"></label><label class="select-label">Seed — номер варианта<input id="seed" type="number" min="0" max="2147483647" value="42"></label>
+          </div></details>
+        </form>
+        <button class="button secondary full" id="regenerate" disabled><span>↻</span> Ещё один вариант</button><p class="muted micro">Те же настройки. Другой рисунок.</p>
+      </aside>
+      <div class="workspace">
+        <section class="panel calendar-panel">
+          <div class="preview-top"><div><div class="section-caption">02 / ПРЕВЬЮ</div><h2>Посмотри, как это будет</h2></div><span class="badge" id="plan-badge"><span class="status-dot"></span> Живое превью</span></div>
+          <div class="calendar-toolbar"><div class="segments" id="modes" aria-label="Режим просмотра"><button data-mode="preview" class="active">Результат</button><button data-mode="current">Сейчас</button><button data-mode="diff">Добавится</button></div><span class="muted small" id="period-label"></span></div>
+          <div class="graph-shell"><div id="calendar" class="calendar" aria-label="Календарь активности"><div class="loading">Загружаю генератор…</div></div></div>
+          <div class="legend-row"><span class="muted small" id="calendar-total">Всё считается из вашего плана</span><div class="legend"><span>Меньше</span><i class="level-0"></i><i class="level-1"></i><i class="level-2"></i><i class="level-3"></i><i class="level-4"></i><span>Больше</span></div></div>
+          <div id="day-detail" class="day-detail" hidden></div>
+          <div class="preview-bottom"><p><span class="status-dot"></span><span id="baseline-status">Существующая активность пока неизвестна</span></p><div class="export-wrap"><label for="export-format" class="sr-only">Формат экспорта</label><select id="export-format"><option value="png">PNG</option><option value="svg">SVG</option><option value="html">HTML</option><option value="json">JSON</option><option value="csv">CSV</option></select><button id="export" class="text-button">Скачать ↓</button></div></div>
+        </section>
+        <div class="metrics"><div><span>Будет добавлено</span><strong id="metric-planned">—</strong><small>новых коммитов</small></div><div><span>Активных дней</span><strong id="metric-days">—</strong><small id="metric-percent">за выбранный период</small></div><div><span>Самая длинная серия</span><strong id="metric-streak">—</strong><small>дней подряд</small></div><div><span>В среднем в активный день</span><strong id="metric-average">—</strong><small>contributions</small></div></div>
+        <section class="panel monthly-panel"><div><h3>Ритм по месяцам</h3><p class="muted small">Паузы — тоже часть рисунка.</p></div><div id="monthly-chart" class="monthly-chart" aria-label="Распределение по месяцам"></div></section>
+        <section class="panel publish-panel" id="publish-panel"><div class="section-caption">03 / ПУБЛИКАЦИЯ</div><div class="publish-heading"><div><h2 id="publish-title">Нравится этот вариант?</h2><p class="muted" id="publish-description">Зафиксируй план, подключи GitHub и проверь детали.</p></div><button id="freeze" class="button primary" disabled>Выбрать этот рисунок <span>→</span></button></div>
+          <div id="publication" hidden>
+            <div class="account-row"><span id="account-label">GitHub не подключён</span><button id="connect" class="button secondary">Подключить GitHub ↗</button><button id="refresh-account" class="text-button" hidden>Обновить подключение</button></div>
+            <p class="small muted" id="auth-status"></p>
+            <div id="installation-help" class="notice" hidden><p>Для создания репозитория установи приложение в свой личный аккаунт. Выбери минимальный доступ к репозиториям в окне GitHub.</p><a id="install-app" class="button secondary" target="_blank" rel="noreferrer">Настроить доступ ↗</a></div>
+            <div class="permissions"><h3>Зачем нужны разрешения</h3><dl><div><dt>Repository creation · запись</dt><dd>Создать выбранный тобой приватный репозиторий.</dd></div><div><dt>Contents · чтение и запись</dt><dd>Отправить план в репозиторий и проверить результат.</dd></div><div><dt>Metadata · чтение</dt><dd>Проверить владельца, приватность и основную ветку.</dd></div></dl><p class="small muted">GitHub даёт приложению доступ к выбранным при установке репозиториям. Сервис проверяет, что публикует только в свой отдельный репозиторий. Права на почту и удаление репозиториев не запрашиваются.</p></div>
+            <label class="toggle baseline-toggle"><span>Учитывать мою текущую активность</span><input id="use-existing" type="checkbox" checked></label><p id="existing-status" class="small muted"></p>
+            <div class="repository-field"><label for="repository">Имя нового приватного репозитория</label><div><span id="repository-owner">you /</span><input id="repository" value="activity-calendar" maxlength="80" pattern="[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}"></div></div>
+            <button id="prepare" class="button primary full" disabled>Проверить перед публикацией →</button><button id="edit" class="text-button full">Вернуться к настройке</button>
+          </div>
+          <div id="receipt" hidden></div>
+        </section>
+        <p class="forecast-note">Это декоративная история, а не показатель опыта или выполненной работы. Оттенки и итоговый счётчик GitHub могут отличаться; обработка contributions занимает время.</p>
+      </div>
+    </section>
+    <section class="how" id="how"><div class="section-caption">ПАРА МИНУТ ОТ ИДЕИ ДО РЕЗУЛЬТАТА</div><div class="how-grid"><article><span>01</span><h3>Найди свой ритм</h3><p>Покрути настройки. Календарь пересчитается локально, без авторизации.</p></article><article><span>02</span><h3>Подключи GitHub</h3><p>Узнай, что разрешаешь, и сравни рисунок с существующей активностью.</p></article><article><span>03</span><h3>Подтверди план</h3><p>Проверь репозиторий и точное число коммитов. Публикация начнётся только по кнопке.</p></article></div></section>
+    <section class="privacy-summary"><div class="privacy-symbol">◎</div><div><h3>Твои настройки остаются у тебя</h3><p>Планы сохраняются в браузере. Сервер временно обрабатывает запросы к GitHub и не пишет их в базу, файлы или логи приложения. Опубликованная история хранится в твоём GitHub.</p></div><button class="text-button" id="privacy-more">Подробнее ↗</button></section>
+  </main>
+  <footer class="wrap"><span>activityforge <span class="muted">/ Сделано для своего ритма.</span></span><div><button id="clear" class="text-button">Очистить браузер</button><button id="revoke" class="text-button" hidden>Отозвать доступ GitHub</button><a href="https://github.com/Manabreaker/activity-forge" target="_blank" rel="noreferrer">GitHub ↗</a></div></footer>
+  <dialog id="confirm-dialog"><div class="dialog-inner"><div class="section-caption">ФИНАЛЬНАЯ ПРОВЕРКА</div><h2>Опубликовать этот план?</h2><p>Будет создан отдельный приватный репозиторий с декоративной историей.</p><dl id="confirm-details"></dl><label class="check-confirm"><input id="agree" type="checkbox"><span>Я подтверждаю создание репозитория и отправку именно этого плана.</span></label><div class="dialog-actions"><button id="cancel-publish" class="button secondary">Назад</button><button id="approve" class="button primary" disabled>Создать и опубликовать</button></div><p id="publish-progress" class="small muted" role="status"></p></div></dialog>
+  <dialog id="privacy-dialog"><div class="dialog-inner"><div class="section-caption">ПРОЗРАЧНО И ПО ДЕЛУ</div><h2>Что происходит с данными</h2><p>Настройки, календарь и зафиксированный план хранятся в localStorage этого браузера. Краткосрочная авторизация хранится в sessionStorage вкладки в зашифрованном виде, до одного часа. Обычный токен GitHub сервер в браузер не передаёт.</p><p>Сервер расшифровывает авторизацию и обрабатывает план в оперативной памяти на время запроса. В приложении нет базы данных, дисковых Git-репозиториев, аналитики и записи содержимого запросов в логи.</p><p>GitHub хранит авторизацию и опубликованную историю. GitHub Pages и провайдер API могут обрабатывать технические метаданные соединения по своим политикам. Мы не можем обещать отсутствие записей у этих провайдеров.</p><p>«Очистить браузер» удаляет данные этого приложения на устройстве. Это не отзывает разрешения GitHub. Для этого используй «Отозвать доступ GitHub» или настройки GitHub; удаление установки приложения — отдельное действие.</p><a href="https://github.com/settings/apps/authorizations" target="_blank" rel="noreferrer">Авторизации GitHub ↗</a><br><a href="https://github.com/settings/installations" target="_blank" rel="noreferrer">Установленные приложения ↗</a><button id="privacy-close" class="button secondary full">Понятно</button></div></dialog>
+  <noscript><p class="wrap notice">Для локального генератора требуется JavaScript и WebAssembly.</p></noscript>
+</body></html>
