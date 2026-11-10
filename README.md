@@ -82,6 +82,8 @@ API: [docs/deployment.md](docs/deployment.md). Ключи не должны по
 
 ## CLI
 
+**[Скачать готовый архив для друга: Windows / macOS / Linux →](https://github.com/Manabreaker/activity-forge/releases/latest/download/github-activity-for-friend.zip)** — шесть бинарников amd64/arm64 и пошаговая инструкция. Для запуска нужны Git и GitHub CLI; Go не требуется.
+
 Полная исходная кроссплатформенная утилита находится в [`cli/`](cli/README.md): интерактивный мастер, локальное браузерное превью, генерация, inspect и подтверждаемая публикация через Git/GitHub CLI. Для сборки: `cd cli && go build -o activityforge .`; дружелюбный запуск: `go build -o activity-forge-friend ./cmd/friend`.
 
 ## Проверки и ограничения
