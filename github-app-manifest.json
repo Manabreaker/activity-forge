@@ -5,7 +5,7 @@
   "setup_url": "https://manabreaker.github.io/activity-forge/",
   "redirect_url": "http://127.0.0.1:4320/setup/callback",
   "public": true,
-  "hook_attributes": {"active": false},
+  "hook_attributes": {"url": "https://activity-forge-calendar.manabreaker.chatgpt.site/", "active": false},
   "default_permissions": {"contents": "write", "metadata": "read", "repository_creation": "write"},
   "default_events": []
 }

@@ -68,7 +68,7 @@ async function api(request, env, fetcher) {
   fail('not_found', 'Маршрут не найден.', 404);
 }
 
-export async function handleRequest(request, env, fetcher = fetch) {
+export async function handleRequest(request, env, fetcher = globalThis.fetch.bind(globalThis)) {
   let response;
   try {
     const url = new URL(request.url);

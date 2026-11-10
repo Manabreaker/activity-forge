@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleRequest } from '../worker/index.js';
+import { GitHub } from '../worker/lib/github.mjs';
 const env = { FRONTEND_URL: 'https://example.github.io/activity-forge/', API_ORIGIN: 'https://api.example.test', SESSION_KEY: Buffer.alloc(32, 9).toString('base64'), GITHUB_CLIENT_ID: 'test-client-id', GITHUB_CLIENT_SECRET: 'test-client-secret', GITHUB_APP_SLUG: 'example-forge' };
 
 test('CORS allows only the configured Pages origin and never enables wildcard credentials', async () => {
@@ -44,4 +45,27 @@ test('OAuth handoff carries browser nonce and encrypted auth, and discards refre
   const hash = new URLSearchParams(location.hash.slice(1)); assert.equal(hash.get('nonce'), 'b'.repeat(64));
   assert.ok(hash.get('session')); assert.ok(!location.href.includes('synthetic-provider-value')); assert.ok(!location.href.includes('synthetic-refresh-value'));
   assert.ok(exchangeBody.code_verifier); assert.equal(exchangeBody.redirect_uri, 'https://api.example.test/oauth/callback');
+});
+
+test('OAuth and GitHub requests preserve the native Worker fetch receiver', async t => {
+  const original = globalThis.fetch;
+  t.after(() => { globalThis.fetch = original; });
+  globalThis.fetch = function (target) {
+    if (this !== globalThis) throw new TypeError('Illegal invocation');
+    if (target.endsWith('/access_token')) return Promise.resolve(Response.json({ access_token: 'synthetic-runtime-value', expires_in: 3600 }));
+    if (target.includes('/user/installations')) return Promise.resolve(Response.json({ installations: [] }));
+    if (target.includes('/info/refs')) return Promise.resolve(new Response(new Uint8Array([1, 2, 3])));
+    return Promise.resolve(Response.json({ id: 12345, login: 'example-user' }));
+  };
+  const start = await handleRequest(new Request('https://api.example.test/oauth/start?nonce=' + 'c'.repeat(64)), env);
+  const state = new URL(start.headers.get('Location')).searchParams.get('state');
+  const callback = await handleRequest(new Request(`https://api.example.test/oauth/callback?code=example&state=${state}`, { headers: { Cookie: start.headers.get('Set-Cookie').split(';')[0] } }), env);
+  assert.equal(callback.status, 302);
+  const session = new URLSearchParams(new URL(callback.headers.get('Location')).hash.slice(1)).get('session');
+  const me = await handleRequest(new Request('https://api.example.test/api/me', { headers: { Origin: 'https://example.github.io', Authorization: 'Bearer ' + session } }), env);
+  assert.equal(me.status, 200);
+  assert.equal((await me.json()).login, 'example-user');
+  const github = new GitHub('synthetic-runtime-value');
+  assert.equal((await github.request('/user')).id, 12345);
+  assert.equal((await github.gitFetch('https://github.com/example-user/calendar.git/info/refs', {})).byteLength, 3);
 });

@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer';
 import { fail } from './security.mjs';
 
 export class GitHub {
-  constructor(token, fetcher = fetch) { this.token = token; this.fetcher = fetcher; }
+  constructor(token, fetcher = globalThis.fetch.bind(globalThis)) { this.token = token; this.fetcher = fetcher; }
   async request(path, options = {}) {
     const response = await this.fetcher(`https://api.github.com${path}`, {
       ...options, redirect: 'error', signal: AbortSignal.timeout(25000),
