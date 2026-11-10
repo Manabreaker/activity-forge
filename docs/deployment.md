@@ -3,11 +3,11 @@
 ## GitHub Pages
 
 1. Создайте публичный репозиторий с этими исходниками.
-2. В Settings → Pages выберите Source: GitHub Actions.
-3. Отправьте `main`: workflow проверит исходники, соберёт WASM и опубликует только `dist/pages`.
+2. Выполните локальные проверки из README, затем `node scripts/build.mjs` и `node scripts/check-wasm.mjs`.
+3. Выполните `node scripts/publish-pages.mjs OWNER/REPO`. В Settings → Pages выберите Deploy from a branch → `gh-pages` → `/`.
 4. При fork замените GitHub URL в интерфейсе/README; задайте адрес API в `web/config.js` и разрешите его в CSP `connect-src` файла `web/index.html`.
 
-Секреты OAuth нельзя класть ни в Pages, ни в build-time переменные frontend, ни в Actions artifacts.
+Секреты OAuth нельзя класть ни в Pages, ни в build-time переменные frontend, ни в Actions artifacts. Альтернатива при доступном Actions runner: выберите Source: GitHub Actions и вручную запустите workflow Publish GitHub Pages. Он проверяет исходники и публикует только `dist/pages`. В первоначальном окружении hosted runner был недоступен до выполнения шагов; branch-based Pages успешно собрался, поэтому используется он.
 
 ## Stateless API
 

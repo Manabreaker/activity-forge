@@ -74,7 +74,9 @@ node scripts/dev.mjs
 
 ## Публикация и настройка OAuth
 
-Workflow `.github/workflows/pages.yml` проверяет Node/Go, собирает WASM, выполняет smoke и публикует `dist/pages` на GitHub Pages. В Settings → Pages выберите GitHub Actions.
+Сайт опубликован из ветки `gh-pages` (Settings → Pages → Deploy from a branch). Обновление после локальных проверок: `node scripts/build.mjs`, `node scripts/check-wasm.mjs`, `node scripts/publish-pages.mjs Manabreaker/activity-forge`. Скрипт отправляет обычный fast-forward commit со статикой; исходники остаются в `main`.
+
+Workflow `.github/workflows/pages.yml` оставлен для ручного запуска: он проверяет Node/Go, собирает WASM, выполняет smoke и публикует `dist/pages`. Для него нужно переключить Source на GitHub Actions. В первоначальном окружении hosted runner не запустился до выполнения шагов. Вариант из ветки `gh-pages` опубликован штатным Pages build без этого runner.
 
 API: [docs/deployment.md](docs/deployment.md). Ключи не должны попадать в код, `.env`, артефакты или Git. Для собственного fork измените `web/config.js`, `connect-src` в `web/index.html` и адреса в настройках App. Значения `FRONTEND_URL` и `API_ORIGIN` должны точно соответствовать вашим адресам.
 
