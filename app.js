@@ -1,6 +1,7 @@
 import { API_ORIGIN } from './config.js';
 import { publicationDestination, matchingReceipt } from './client-state.js';
 import { Drawing, BRUSH_COUNTS, drawingConfig, brushLevel, calendarLayout, cellIndex, gridLine, restoreEditor } from './drawing.js';
+import { currentDayStyle } from './calendar-colors.js';
 const $ = id => document.getElementById(id);
 const num = n => Number(n).toLocaleString('ru-RU');
 const esc = value => String(value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -114,10 +115,7 @@ function graphSVG(p, exported = false) {
     lastMonth = month;
     let level = p.config.manual && state.mode !== 'current' ? brushLevel(countFor(d)) : levelFor(countFor(d), positives), fill = colors[level];
     if (state.mode === 'current' && p.existing.known) {
-      const current = p.existing.days[d.date];
-      const actual = ['NONE', 'FIRST_QUARTILE', 'SECOND_QUARTILE', 'THIRD_QUARTILE', 'FOURTH_QUARTILE'].indexOf(current?.contributionLevel);
-      if (actual >= 0) level = actual;
-      fill = /^#[a-f\d]{6}$/i.test(current?.color || '') ? current.color : colors[level];
+      ({ level, fill } = currentDayStyle(d.existing, p.existing.days[d.date], colors, level));
     }
     const title = `${d.date} · уже есть: ${p.existing.known ? d.existing : 'неизвестно'} · добавится: ${d.new} · итог: ${d.projected}`;
     svg += `<rect class="day level-${level}" ${exported ? '' : `tabindex="0" role="button" data-day="${i}" aria-label="${esc(title)}"`} x="${left + column * step}" y="${top + row * step}" width="${cell}" height="${cell}" fill="${fill}" rx="2"><title>${esc(title)}</title></rect>`;
