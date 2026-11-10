@@ -24,7 +24,7 @@ async function oauth(request, env, fetcher) {
   if (url.pathname !== '/oauth/callback') fail('not_found', 'Страница не найдена.', 404);
   const flow = await unseal(cookie(request, 'af_oauth'), env.SESSION_KEY, 'oauth');
   if (url.searchParams.get('state') !== flow.state || !url.searchParams.get('code') || url.searchParams.has('error')) fail('oauth_state', 'Вход отменён или проверка безопасности не прошла. Начните вход заново.');
-  const response = await fetcher('https://github.com/login/oauth/access_token', { method: 'POST', signal: AbortSignal.timeout(20000), redirect: 'error', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'Activity-Forge' }, body: JSON.stringify({ client_id: env.GITHUB_CLIENT_ID, client_secret: env.GITHUB_CLIENT_SECRET, code: url.searchParams.get('code'), redirect_uri: origin + '/oauth/callback', code_verifier: flow.verifier }) });
+  const response = await fetcher('https://github.com/login/oauth/access_token', { method: 'POST', signal: AbortSignal.timeout(20000), redirect: 'manual', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'Activity-Forge' }, body: JSON.stringify({ client_id: env.GITHUB_CLIENT_ID, client_secret: env.GITHUB_CLIENT_SECRET, code: url.searchParams.get('code'), redirect_uri: origin + '/oauth/callback', code_verifier: flow.verifier }) });
   if (!response.ok) { await response.body?.cancel(); fail('oauth_exchange', 'GitHub не подтвердил вход. Попробуйте заново.'); }
   const data = await response.json();
   if (data.error || typeof data.access_token !== 'string' || data.access_token.length > 4096) fail('oauth_exchange', 'GitHub не выдал доступ. Попробуйте заново.');
@@ -55,7 +55,7 @@ async function api(request, env, fetcher) {
     return json(await github.calendar(start, end, user.login));
   }
   if (url.pathname === '/api/revoke' && request.method === 'POST') {
-    const response = await fetcher(`https://api.github.com/applications/${encodeURIComponent(env.GITHUB_CLIENT_ID)}/grant`, { method: 'DELETE', signal: AbortSignal.timeout(20000), redirect: 'error', headers: { Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'Activity-Forge', Authorization: `Basic ${Buffer.from(`${env.GITHUB_CLIENT_ID}:${env.GITHUB_CLIENT_SECRET}`).toString('base64')}` }, body: JSON.stringify({ access_token: auth.token }) });
+    const response = await fetcher(`https://api.github.com/applications/${encodeURIComponent(env.GITHUB_CLIENT_ID)}/grant`, { method: 'DELETE', signal: AbortSignal.timeout(20000), redirect: 'manual', headers: { Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'Activity-Forge', Authorization: `Basic ${Buffer.from(`${env.GITHUB_CLIENT_ID}:${env.GITHUB_CLIENT_SECRET}`).toString('base64')}` }, body: JSON.stringify({ access_token: auth.token }) });
     await response.body?.cancel();
     if (![204, 404].includes(response.status)) fail('revoke_failed', 'GitHub не подтвердил отзыв. Отзовите доступ в настройках GitHub.');
     return json({ revoked: true, installationRemovalUrl: 'https://github.com/settings/installations' });

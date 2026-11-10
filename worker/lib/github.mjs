@@ -5,7 +5,7 @@ export class GitHub {
   constructor(token, fetcher = globalThis.fetch.bind(globalThis)) { this.token = token; this.fetcher = fetcher; }
   async request(path, options = {}) {
     const response = await this.fetcher(`https://api.github.com${path}`, {
-      ...options, redirect: 'error', signal: AbortSignal.timeout(25000),
+      ...options, redirect: 'manual', signal: AbortSignal.timeout(25000),
       headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10', 'User-Agent': 'Activity-Forge', Authorization: `Bearer ${this.token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers }
     });
     if (response.status === 404 && options.optional) { await response.body?.cancel(); return null; }
@@ -19,7 +19,7 @@ export class GitHub {
   }
   async gitFetch(url, options) {
     if (!url.startsWith('https://github.com/')) fail('invalid_git_url', 'Некорректный адрес Git.', 500);
-    const response = await this.fetcher(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(60000), headers: { Authorization: `Basic ${Buffer.from(`x-access-token:${this.token}`).toString('base64')}`, 'User-Agent': 'Activity-Forge', ...options.headers } });
+    const response = await this.fetcher(url, { ...options, redirect: 'manual', signal: AbortSignal.timeout(60000), headers: { Authorization: `Basic ${Buffer.from(`x-access-token:${this.token}`).toString('base64')}`, 'User-Agent': 'Activity-Forge', ...options.headers } });
     if (!response.ok) { await response.body?.cancel(); fail('git_request_failed', 'GitHub не подтвердил запрос Git. Повторите проверку с тем же планом.', 400); }
     return response.arrayBuffer();
   }

@@ -47,11 +47,12 @@ test('OAuth handoff carries browser nonce and encrypted auth, and discards refre
   assert.ok(exchangeBody.code_verifier); assert.equal(exchangeBody.redirect_uri, 'https://api.example.test/oauth/callback');
 });
 
-test('OAuth and GitHub requests preserve the native Worker fetch receiver', async t => {
+test('OAuth and GitHub requests use supported Worker fetch options and receiver', async t => {
   const original = globalThis.fetch;
   t.after(() => { globalThis.fetch = original; });
-  globalThis.fetch = function (target) {
+  globalThis.fetch = function (target, init) {
     if (this !== globalThis) throw new TypeError('Illegal invocation');
+    if (init?.redirect === 'error') throw new TypeError('Invalid redirect value');
     if (target.endsWith('/access_token')) return Promise.resolve(Response.json({ access_token: 'synthetic-runtime-value', expires_in: 3600 }));
     if (target.includes('/user/installations')) return Promise.resolve(Response.json({ installations: [] }));
     if (target.includes('/info/refs')) return Promise.resolve(new Response(new Uint8Array([1, 2, 3])));
@@ -68,4 +69,18 @@ test('OAuth and GitHub requests preserve the native Worker fetch receiver', asyn
   const github = new GitHub('synthetic-runtime-value');
   assert.equal((await github.request('/user')).id, 12345);
   assert.equal((await github.gitFetch('https://github.com/example-user/calendar.git/info/refs', {})).byteLength, 3);
+});
+
+test('credential-bearing GitHub requests reject provider redirects', async () => {
+  const redirect = async (_target, init) => {
+    assert.equal(init.redirect, 'manual');
+    return new Response(null, { status: 302, headers: { Location: 'https://untrusted.example.test/' } });
+  };
+  const start = await handleRequest(new Request('https://api.example.test/oauth/start?nonce=' + 'd'.repeat(64)), env);
+  const state = new URL(start.headers.get('Location')).searchParams.get('state');
+  const callback = await handleRequest(new Request(`https://api.example.test/oauth/callback?code=example&state=${state}`, { headers: { Cookie: start.headers.get('Set-Cookie').split(';')[0] } }), env, redirect);
+  assert.equal((await callback.json()).code, 'oauth_exchange');
+  const github = new GitHub('synthetic-redirect-value', redirect);
+  await assert.rejects(github.request('/user'), { code: 'github_request_failed' });
+  await assert.rejects(github.gitFetch('https://github.com/example-user/calendar.git/info/refs', {}), { code: 'git_request_failed' });
 });
